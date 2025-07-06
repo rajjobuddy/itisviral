@@ -27,7 +27,7 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y jq curl
 
     - name: Write GCP Service Account key to file
-      run: echo "${{ secrets.GCP_SA_KEY }}" > "${SA_KEY_PATH}"
+      run: printf "%b" "${{ secrets.GCP_SA_KEY }}" > "${SA_KEY_PATH}"
 
     - name: Debug gcp-key.json
       run: cat "${SA_KEY_PATH}"
