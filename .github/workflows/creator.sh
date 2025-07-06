@@ -1,0 +1,121 @@
+name: Generate Veo Video
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: 'Prompt to generate video'
+        required: true
+        type: string
+
+jobs:
+  generate-video:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: gothic-envelope-458808-h6
+      LOCATION_ID: us-central1
+      API_ENDPOINT: us-central1-aiplatform.googleapis.com
+      MODEL_ID: veo-3.0-generate-preview
+      SA_KEY_PATH: ${{ github.workspace }}/gcp-key.json
+      OUTPUT_VIDEO: output.mp4
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up jq and curl
+      run: sudo apt-get update && sudo apt-get install -y jq curl
+
+    - name: Write GCP Service Account key to file
+      run: echo "${{ secrets.GCP_SA_KEY }}" > "${SA_KEY_PATH}"
+
+    - name: Authenticate to Google Cloud
+      run: |
+        gcloud auth activate-service-account --key-file="${SA_KEY_PATH}"
+        gcloud config set project "${PROJECT_ID}"
+
+    - name: Create request.json
+      run: |
+        cat << EOF > request.json
+        {
+          "endpoint": "projects/${PROJECT_ID}/locations/${LOCATION_ID}/publishers/google/models/${MODEL_ID}",
+          "instances": [
+            {
+              "prompt": "${{ github.event.inputs.prompt }}"
+            }
+          ],
+          "parameters": {
+            "aspectRatio": "9:16",
+            "sampleCount": 1,
+            "durationSeconds": "8",
+            "personGeneration": "allow_adult",
+            "addWatermark": true,
+            "includeRaiReason": true,
+            "generateAudio": true
+          }
+        }
+        EOF
+
+    - name: Start video generation (predictLongRunning)
+      id: predict
+      run: |
+        RESPONSE=$(curl -s -X POST \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+          "https://${API_ENDPOINT}/v1/projects/${PROJECT_ID}/locations/${LOCATION_ID}/publishers/google/models/${MODEL_ID}:predictLongRunning" \
+          -d @request.json)
+        echo "$RESPONSE" > response.json
+        OPERATION_ID=$(jq -r .name response.json)
+        echo "OPERATION_ID=$OPERATION_ID" >> $GITHUB_OUTPUT
+
+    - name: Poll for operation completion
+      id: poll
+      run: |
+        OP_NAME="${{ steps.predict.outputs.OPERATION_ID }}"
+        echo "Polling for completion of $OP_NAME"
+        for i in {1..60}; do
+          cat << EOF > fetch.json
+          {
+            "operationName": "$OP_NAME"
+          }
+          EOF
+          RESPONSE=$(curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+            "https://${API_ENDPOINT}/v1/projects/${PROJECT_ID}/locations/${LOCATION_ID}/publishers/google/models/${MODEL_ID}:fetchPredictOperation" \
+            -d @fetch.json)
+          echo "$RESPONSE" > fetch_response.json
+          DONE=$(jq .done fetch_response.json)
+          if [[ "$DONE" == "true" ]]; then
+            echo "Operation completed"
+            break
+          fi
+          echo "Not done yet, sleeping..."
+          sleep 10
+        done
+        if [[ "$DONE" != "true" ]]; then
+          echo "Timeout waiting for video generation"
+          exit 1
+        fi
+
+    - name: Extract video URL
+      id: extract_url
+      run: |
+        # This path may need adjustment depending on actual API response structure!
+        VIDEO_URL=$(jq -r '.response.predictions[0].videoUri // .response.predictions[0].videoUrl // empty' fetch_response.json)
+        if [[ -z "$VIDEO_URL" ]]; then
+          echo "Could not find video URL in response:"
+          cat fetch_response.json
+          exit 1
+        fi
+        echo "VIDEO_URL=$VIDEO_URL" >> $GITHUB_OUTPUT
+
+    - name: Download generated video
+      run: |
+        curl -L "${{ steps.extract_url.outputs.VIDEO_URL }}" --output "${OUTPUT_VIDEO}"
+
+    - name: Upload video artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: generated-video
+        path: output.mp4
