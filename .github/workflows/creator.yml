@@ -26,16 +26,12 @@ jobs:
     - name: Set up jq and curl
       run: sudo apt-get update && sudo apt-get install -y jq curl
 
-    - name: Write GCP Service Account key to file
-      run: printf "%b" "${{ secrets.GCP_SA_KEY }}" > "${SA_KEY_PATH}"
-
-    - name: Debug gcp-key.json
-      run: cat "${SA_KEY_PATH}"
-
     - name: Authenticate to Google Cloud
-      run: |
-        gcloud auth activate-service-account --key-file="${SA_KEY_PATH}"
-        gcloud config set project "${PROJECT_ID}"
+      id: auth
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        create_credentials_file: true
 
     - name: Create request.json
       run: |
