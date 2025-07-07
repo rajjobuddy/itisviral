@@ -96,6 +96,10 @@ jobs:
             exit 1
           fi
 
+      - name: Debug: Show API response
+        run: |
+          jq . fetch_response.json
+
       - name: Extract video URL
         id: extract_url
         run: |
