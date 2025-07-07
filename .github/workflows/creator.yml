@@ -65,23 +65,24 @@ jobs:
           echo "$RESPONSE" > response.json
           OPERATION_ID=$(jq -r .name response.json)
           echo "operation_id=$OPERATION_ID" >> $GITHUB_OUTPUT
-
+          
       - name: Poll for operation completion
         id: poll
         run: |
           OP_NAME="${{ steps.predict.outputs.operation_id }}"
           echo "Polling for completion of $OP_NAME"
+
           for i in {1..60}; do
-            cat <<EOF > fetch.json
-            {
-              "operationName": "$OP_NAME"
-            }
-            EOF
+            echo '{
+          "operationName": "'"$OP_NAME"'"
+          }' > fetch.json
+
             RESPONSE=$(curl -s -X POST \
               -H "Content-Type: application/json" \
               -H "Authorization: Bearer $(gcloud auth print-access-token)" \
               "https://${API_ENDPOINT}/v1/projects/${PROJECT_ID}/locations/${LOCATION_ID}/publishers/google/models/${MODEL_ID}:fetchPredictOperation" \
               -d @fetch.json)
+
             echo "$RESPONSE" > fetch_response.json
             DONE=$(jq .done fetch_response.json)
             if [[ "$DONE" == "true" ]]; then
