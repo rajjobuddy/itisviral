@@ -43,7 +43,7 @@ jobs:
               }
             ],
             "parameters": {
-              "aspectRatio": "9:16",
+              "aspectRatio": "16:9",
               "sampleCount": 1,
               "durationSeconds": "8",
               "personGeneration": "allow_adult",
