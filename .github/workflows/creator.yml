@@ -96,7 +96,7 @@ jobs:
             exit 1
           fi
 
-      - name: Debug: Show API response
+      - name: Debug Show API response
         run: |
           jq . fetch_response.json
 
