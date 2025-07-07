@@ -16,7 +16,7 @@ jobs:
       LOCATION_ID: us-central1
       API_ENDPOINT: us-central1-aiplatform.googleapis.com
       MODEL_ID: veo-3.0-generate-preview
-      OUTPUT_VIDEO: output.mp4
+      OUTPUT_VIDEO: video.mp4
 
     steps:
       - name: Checkout
@@ -54,32 +54,56 @@ jobs:
           }
           EOF
 
-      - name: Run video generation script
+      - name: Start video generation (predictLongRunning)
+        id: predict
         run: |
-          chmod +x makevideo.sh
-          ./makevideo.sh
+          RESPONSE=$(curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+            "https://${API_ENDPOINT}/v1/projects/${PROJECT_ID}/locations/${LOCATION_ID}/publishers/google/models/${MODEL_ID}:predictLongRunning" \
+            -d @request.json)
+          echo "$RESPONSE" > response.json
+          OPERATION_ID=$(jq -r .name response.json)
+          echo "operation_id=$OPERATION_ID" >> $GITHUB_OUTPUT
 
-      - name: Debug Show API response
+      - name: Poll for operation completion
+        id: poll
         run: |
-          jq . fetch_response.json
+          OP_NAME="${{ steps.predict.outputs.operation_id }}"
+          echo "Polling for completion of $OP_NAME"
+          for i in {1..60}; do
+            cat <<EOF > fetch.json
+            {
+              "operationName": "$OP_NAME"
+            }
+            EOF
+            RESPONSE=$(curl -s -X POST \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+              "https://${API_ENDPOINT}/v1/projects/${PROJECT_ID}/locations/${LOCATION_ID}/publishers/google/models/${MODEL_ID}:fetchPredictOperation" \
+              -d @fetch.json)
+            echo "$RESPONSE" > fetch_response.json
+            DONE=$(jq .done fetch_response.json)
+            if [[ "$DONE" == "true" ]]; then
+              echo "Operation completed"
+              break
+            fi
+            echo "Not done yet, sleeping..."
+            sleep 10
+          done
 
-      - name: Extract video URL
-        id: extract_url
-        run: |
-          VIDEO_URL=$(jq -r '.response.videos[0].videoUri // .response.videos[0].videoUrl // empty' fetch_response.json)
-          if [[ -z "$VIDEO_URL" ]]; then
-            echo "Could not find video URL in response:"
-            cat fetch_response.json
+          if [[ "$DONE" != "true" ]]; then
+            echo "Timeout waiting for video generation"
             exit 1
           fi
-          echo "VIDEO_URL=$VIDEO_URL" >> $GITHUB_OUTPUT
 
-      - name: Download generated video
+      - name: Extract and decode video
         run: |
-          curl -L "${{ steps.extract_url.outputs.VIDEO_URL }}" --output "${OUTPUT_VIDEO}"
+          VIDEO_BASE64=$(jq -r '.response.videos[0].bytesBase64Encoded' fetch_response.json)
+          echo "$VIDEO_BASE64" | base64 -d > "${OUTPUT_VIDEO}"
 
       - name: Upload video artifact
         uses: actions/upload-artifact@v4
         with:
           name: generated-video
-          path: output.mp4
+          path: ${{ env.OUTPUT_VIDEO }}
