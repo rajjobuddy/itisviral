@@ -72,11 +72,11 @@ jobs:
           OP_NAME="${{ steps.predict.outputs.OPERATION_ID }}"
           echo "Polling for completion of $OP_NAME"
           for i in {1..60}; do
-cat <<EOF > fetch.json
-{
-  "operationName": "$OP_NAME"
-}
-EOF
+          cat <<EOF > fetch.json
+          {
+            "operationName": "$OP_NAME"
+          }
+          EOF
             RESPONSE=$(curl -s -X POST \
               -H "Content-Type: application/json" \
               -H "Authorization: Bearer $(gcloud auth print-access-token)" \
