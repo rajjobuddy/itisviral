@@ -35,24 +35,24 @@ jobs:
       - name: Create request.json
         run: |
           cat <<EOF > request.json
-          {
-            "endpoint": "projects/${PROJECT_ID}/locations/${LOCATION_ID}/publishers/google/models/${MODEL_ID}",
-            "instances": [
-              {
-                "prompt": "${{ github.event.inputs.prompt }}"
-              }
-            ],
-            "parameters": {
-              "aspectRatio": "16:9",
-              "sampleCount": 1,
-              "durationSeconds": "8",
-              "personGeneration": "allow_adult",
-              "addWatermark": true,
-              "includeRaiReason": true,
-              "generateAudio": true
-            }
-          }
-          EOF
+{
+  "endpoint": "projects/${PROJECT_ID}/locations/${LOCATION_ID}/publishers/google/models/${MODEL_ID}",
+  "instances": [
+    {
+      "prompt": "${{ github.event.inputs.prompt }}"
+    }
+  ],
+  "parameters": {
+    "aspectRatio": "16:9",
+    "sampleCount": 1,
+    "durationSeconds": "8",
+    "personGeneration": "allow_adult",
+    "addWatermark": true,
+    "includeRaiReason": true,
+    "generateAudio": true
+  }
+}
+EOF
 
       - name: Start video generation (predictLongRunning)
         id: predict
@@ -73,10 +73,10 @@ jobs:
           echo "Polling for completion of $OP_NAME"
           for i in {1..60}; do
             cat <<EOF > fetch.json
-            {
-              "operationName": "$OP_NAME"
-            }
-            EOF
+{
+  "operationName": "$OP_NAME"
+}
+EOF
             RESPONSE=$(curl -s -X POST \
               -H "Content-Type: application/json" \
               -H "Authorization: Bearer $(gcloud auth print-access-token)" \
@@ -100,6 +100,11 @@ jobs:
       - name: Extract and decode video
         run: |
           VIDEO_BASE64=$(jq -r '.response.videos[0].bytesBase64Encoded' fetch_response.json)
+          if [ -z "$VIDEO_BASE64" ] || [ "$VIDEO_BASE64" == "null" ]; then
+            echo "No base64 video data found"
+            cat fetch_response.json
+            exit 1
+          fi
           echo "$VIDEO_BASE64" | base64 -d > "${OUTPUT_VIDEO}"
 
       - name: Upload video artifact
