@@ -54,47 +54,10 @@ jobs:
           }
           EOF
 
-      - name: Start video generation (predictLongRunning)
-        id: predict
+      - name: Run video generation script
         run: |
-          RESPONSE=$(curl -s -X POST \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $(gcloud auth print-access-token)" \
-            "https://${API_ENDPOINT}/v1/projects/${PROJECT_ID}/locations/${LOCATION_ID}/publishers/google/models/${MODEL_ID}:predictLongRunning" \
-            -d @request.json)
-          echo "$RESPONSE" > response.json
-          OPERATION_ID=$(jq -r .name response.json)
-          echo "OPERATION_ID=$OPERATION_ID" >> $GITHUB_OUTPUT
-
-      - name: Poll for operation completion
-        id: poll
-        run: |
-          OP_NAME="${{ steps.predict.outputs.OPERATION_ID }}"
-          echo "Polling for completion of $OP_NAME"
-          for i in {1..60}; do
-          cat <<EOF > fetch.json
-          {
-            "operationName": "$OP_NAME"
-          }
-          EOF
-            RESPONSE=$(curl -s -X POST \
-              -H "Content-Type: application/json" \
-              -H "Authorization: Bearer $(gcloud auth print-access-token)" \
-              "https://${API_ENDPOINT}/v1/projects/${PROJECT_ID}/locations/${LOCATION_ID}/publishers/google/models/${MODEL_ID}:fetchPredictOperation" \
-              -d @fetch.json)
-            echo "$RESPONSE" > fetch_response.json
-            DONE=$(jq .done fetch_response.json)
-            if [[ "$DONE" == "true" ]]; then
-              echo "Operation completed"
-              break
-            fi
-            echo "Not done yet, sleeping..."
-            sleep 10
-          done
-          if [[ "$DONE" != "true" ]]; then
-            echo "Timeout waiting for video generation"
-            exit 1
-          fi
+          chmod +x makevideo.sh
+          ./makevideo.sh
 
       - name: Debug Show API response
         run: |
