@@ -35,24 +35,24 @@ jobs:
       - name: Create request.json
         run: |
           cat <<EOF > request.json
-{
-  "endpoint": "projects/${PROJECT_ID}/locations/${LOCATION_ID}/publishers/google/models/${MODEL_ID}",
-  "instances": [
-    {
-      "prompt": "${{ github.event.inputs.prompt }}"
-    }
-  ],
-  "parameters": {
-    "aspectRatio": "16:9",
-    "sampleCount": 1,
-    "durationSeconds": "8",
-    "personGeneration": "allow_adult",
-    "addWatermark": true,
-    "includeRaiReason": true,
-    "generateAudio": true
-  }
-}
-EOF
+          {
+            "endpoint": "projects/${PROJECT_ID}/locations/${LOCATION_ID}/publishers/google/models/${MODEL_ID}",
+            "instances": [
+              {
+                "prompt": "${{ github.event.inputs.prompt }}"
+              }
+            ],
+            "parameters": {
+              "aspectRatio": "16:9",
+              "sampleCount": 1,
+              "durationSeconds": "8",
+              "personGeneration": "allow_adult",
+              "addWatermark": true,
+              "includeRaiReason": true,
+              "generateAudio": true
+            }
+          }
+          EOF
 
       - name: Start video generation (predictLongRunning)
         id: predict
