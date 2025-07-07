@@ -43,7 +43,7 @@ jobs:
               }
             ],
             "parameters": {
-              "aspectRatio": "16:9",
+              "aspectRatio": "9:16",
               "sampleCount": 1,
               "durationSeconds": "8",
               "personGeneration": "allow_adult",
@@ -72,11 +72,11 @@ jobs:
           OP_NAME="${{ steps.predict.outputs.OPERATION_ID }}"
           echo "Polling for completion of $OP_NAME"
           for i in {1..60}; do
-          cat <<EOF > fetch.json
-          {
-            "operationName": "$OP_NAME"
-          }
-          EOF
+cat <<EOF > fetch.json
+{
+  "operationName": "$OP_NAME"
+}
+EOF
             RESPONSE=$(curl -s -X POST \
               -H "Content-Type: application/json" \
               -H "Authorization: Bearer $(gcloud auth print-access-token)" \
@@ -99,7 +99,7 @@ jobs:
       - name: Extract video URL
         id: extract_url
         run: |
-          VIDEO_URL=$(jq -r '.response.predictions[0].videoUri // .response.predictions[0].videoUrl // empty' fetch_response.json)
+          VIDEO_URL=$(jq -r '.response.videos[0].videoUri // .response.videos[0].videoUrl // empty' fetch_response.json)
           if [[ -z "$VIDEO_URL" ]]; then
             echo "Could not find video URL in response:"
             cat fetch_response.json
